@@ -1,0 +1,52 @@
+name = "gjtaskman"
+compatibility_date = "2025-04-19"
+
+main = "gjtaskman.js"
+
+# --- Durable Object Bindings (No changes here) ---
+ 
+[[durable_objects.bindings]]
+name = "GJTASKMAN"
+class_name = "GjTaskman"
+
+[vars]
+# EXAMPLE_VAR = "some_value"
+
+# --- D1 数据库绑定 ---
+# 将你的 D1 数据库绑定到这个 Worker 上，代码中可以通过 env.DB 来访问
+[[d1_databases]]
+binding = "DB"                  # 在代码中使用的名字 (env.DB)
+database_name = "vdown"  # 你在 Cloudflare 创建的 D1 数据库的名称
+database_id = "03d64d46-1842-4403-846a-95fd01de87a7"    # 你在 Cloudflare 创建的 D1 数据库的 UUID
+
+# --- KV 命名空间绑定 ---
+# 将你的 KV 命名空间绑定到这个 Worker 上
+
+ 
+# 你提到的 VINFOKV，如果它是 PROFILES_KV 的别名或有其他用途，也一并绑定
+[[kv_namespaces]]
+binding = "VINFOKV"             # 在代码中使用的名字 (env.VINFOKV)
+id = "80ef0424caac4d629ea752b810f5f8de"      # 你的 VINFOKV 的 Namespace ID
+
+# 你提到的 VINFOKV，如果它是 PROFILES_KV 的别名或有其他用途，也一并绑定
+[[kv_namespaces]]
+binding = "USERVIDEO_KV"             # 在代码中使用的名字 (env.VINFOKV)
+id = "f20b7670a4a1475993f7c921c0521c83"      # 你的 VINFOKV 的 Namespace ID
+
+
+
+ 
+# --- Migrations (THIS IS THE CORRECTED PART) ---
+
+# This migration block should be either REMOVED or LEFT EMPTY
+# because the 'Taskman' class has already been migrated.
+# Keeping it but empty is safe.
+[[migrations]]
+ # Give it a descriptive, old tag
+# new_classes = ["Taskman"] # This line MUST be removed or commented out
+
+# This is the NEW migration for this deployment.
+# It only introduces the classes that are truly new.
+[[migrations]]
+tag = "version-G-jiwoo-taskman"
+new_classes = ["GjTaskman"] # We are only telling Cloudflare about the NEW class
