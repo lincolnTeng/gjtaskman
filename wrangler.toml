@@ -8,7 +8,7 @@ main = "gjtaskman.js"
 [[durable_objects.bindings]]
 name = "GJTASKMAN"
 class_name = "GjTaskman"
-
+script_name = "gjtaskman" 
 [vars]
 # EXAMPLE_VAR = "some_value"
 
