@@ -364,3 +364,16 @@ export class GjTaskman {
     await this.env.USERVIDEO_KV.put("queue:length", currentLength - 1);
   }
 }
+
+
+
+
+
+export default {
+  fetch(request, env, ctx) {
+    // This root fetch handler is not used in our architecture because
+    // all requests are routed via the Cloudflare Functions project (vdown).
+    // It serves as a simple health check.
+    return new Response("workervd is active.");
+  }
+};
