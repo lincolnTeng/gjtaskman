@@ -41,7 +41,7 @@ id = "f20b7670a4a1475993f7c921c0521c83"      # 你的 VINFOKV 的 Namespace ID
 # This migration block should be either REMOVED or LEFT EMPTY
 # because the 'Taskman' class has already been migrated.
 # Keeping it but empty is safe.
-[[migrations]]
+ 
  # Give it a descriptive, old tag
 # new_classes = ["Taskman"] # This line MUST be removed or commented out
 
