@@ -2,7 +2,7 @@ name = "gjtaskman"
 compatibility_date = "2025-04-19"
 
 main = "gjtaskman.js"
-
+workers_dev = false
 # --- Durable Object Bindings (No changes here) ---
  
 [[durable_objects.bindings]]
