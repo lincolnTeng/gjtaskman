@@ -33,6 +33,7 @@ id = "80ef0424caac4d629ea752b810f5f8de"      # 你的 VINFOKV 的 Namespace ID
 binding = "USERVIDEO_KV"             # 在代码中使用的名字 (env.VINFOKV)
 id = "f20b7670a4a1475993f7c921c0521c83"      # 你的 VINFOKV 的 Namespace ID
 
-
-
+[[migrations]]
+tag = "v1"
+new_classes = [ "GjTaskman" ]
  
