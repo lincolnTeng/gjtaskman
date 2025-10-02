@@ -8,7 +8,7 @@ main = "gjtaskman.js"
 [[durable_objects.bindings]]
 name = "GJTASKMAN"
 class_name = "GjTaskman"
-script_name = "gjtaskman" 
+
 [vars]
 # EXAMPLE_VAR = "some_value"
 
@@ -36,17 +36,3 @@ id = "f20b7670a4a1475993f7c921c0521c83"      # 你的 VINFOKV 的 Namespace ID
 
 
  
-# --- Migrations (THIS IS THE CORRECTED PART) ---
-
-# This migration block should be either REMOVED or LEFT EMPTY
-# because the 'Taskman' class has already been migrated.
-# Keeping it but empty is safe.
- 
- # Give it a descriptive, old tag
-# new_classes = ["Taskman"] # This line MUST be removed or commented out
-
-# This is the NEW migration for this deployment.
-# It only introduces the classes that are truly new.
-[[migrations]]
-tag = "version-G-jiwoo-taskman"
-new_classes = ["GjTaskman"] # We are only telling Cloudflare about the NEW class
