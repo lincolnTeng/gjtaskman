@@ -254,20 +254,22 @@ export class GjTaskman {
     }
   }
 
- // --- NEW: Atomic patrol lock and snapshot provider ---
+ 
+  // --- NEW: Atomic patrol lock and snapshot provider (CORRECTED) ---
   async requestPatrol() {
       const now = Date.now();
       if (now - this.lastPatrolTime < PATROL_INTERVAL_MS) {
           // Not yet time to patrol, return a signal.
           return new Response(JSON.stringify({
               eligible: false,
-              message: `Patrol is on cooldown. Try again in ${((this.lastPatrolTime + PATROL_INTERVAL_MS) - now) / 1000}s.`
+              message: `Patrol is on cooldown. Try again in ${Math.round(((this.lastPatrolTime + PATROL_INTERVAL_MS) - now) / 1000)}s.`
           }), { status: 429 });
       }
 
       // It's time. Grant the lock by updating the timestamp immediately.
       this.lastPatrolTime = now;
-      this.state.storage.put("lastPatrolTime", this.lastPatrolTime); // Persist in the background
+      // --- CRITICAL FIX: Await the storage operation to guarantee persistence ---
+      await this.state.storage.put("lastPatrolTime", this.lastPatrolTime);
 
       // Return eligibility along with the current timestamp and the full pool snapshot.
       return new Response(JSON.stringify({
@@ -277,6 +279,9 @@ export class GjTaskman {
       }), { headers: { 'Content-Type': 'application/json' }});
   }
 
+
+
+  
   // --- NEW: Cleans up slots that have been successfully archived ---
   async freeOverSlots(request) {
       const { taskIds } = await request.json();
