@@ -2,17 +2,21 @@
 // A simplified, robust Durable Object for task management based on a fixed-size pool.
 
 const POOL_SIZE = 50;
+const PATROL_INTERVAL_MS = 15000; // 15 seconds
 
 export class GjTaskman {
   constructor(state, env) {
     this.state = state;
     this.env = env;
     this.taskpool = [];
+    this.lastPatrolTime = 0; // New state for patrol lock    
     this.initializePromise = this.initialize();
   }
 
   async initialize() {
     this.taskpool = await this.state.storage.get("gj_taskpool") || [];
+    this.lastPatrolTime = await this.state.storage.get("lastPatrolTime") || 0;
+    
     if (this.taskpool.length !== POOL_SIZE) {
       this.taskpool = Array.from({ length: POOL_SIZE }, (_, i) => this._createFreeSlot(i));
       await this.state.storage.put("gj_taskpool", this.taskpool);
@@ -37,6 +41,12 @@ export class GjTaskman {
       case "/taskstate": return this.taskstate(request);
       case "/takeandover": return this.takeandover(request); // New endpoint for frontend
       case "/totalstate": return this.totalstate(request);
+      // --- NEW ADMIN ENDPOINTS ---
+      case "/requestpatrol": return this.requestPatrol(request);
+      case "/freeoverslots": return this.freeOverSlots(request);
+      // ---------------------------
+
+        
       default: return new Response("Not Found in GjTaskman DO", { status: 404 });
     }
   }
@@ -244,7 +254,48 @@ export class GjTaskman {
     }
   }
 
+ // --- NEW: Atomic patrol lock and snapshot provider ---
+  async requestPatrol() {
+      const now = Date.now();
+      if (now - this.lastPatrolTime < PATROL_INTERVAL_MS) {
+          // Not yet time to patrol, return a signal.
+          return new Response(JSON.stringify({
+              eligible: false,
+              message: `Patrol is on cooldown. Try again in ${((this.lastPatrolTime + PATROL_INTERVAL_MS) - now) / 1000}s.`
+          }), { status: 429 });
+      }
 
+      // It's time. Grant the lock by updating the timestamp immediately.
+      this.lastPatrolTime = now;
+      this.state.storage.put("lastPatrolTime", this.lastPatrolTime); // Persist in the background
+
+      // Return eligibility along with the current timestamp and the full pool snapshot.
+      return new Response(JSON.stringify({
+          eligible: true,
+          patrolTimestamp: this.lastPatrolTime,
+          poolSnapshot: this.taskpool
+      }), { headers: { 'Content-Type': 'application/json' }});
+  }
+
+  // --- NEW: Cleans up slots that have been successfully archived ---
+  async freeOverSlots(request) {
+      const { taskIds } = await request.json();
+      let freedCount = 0;
+      if (taskIds && Array.isArray(taskIds) && taskIds.length > 0) {
+          let modified = false;
+          this.taskpool.forEach((slot, index) => {
+              if (slot.state === 'over' && taskIds.includes(slot.taskId)) {
+                  this.taskpool[index] = this._createFreeSlot(index);
+                  freedCount++;
+                  modified = true;
+              }
+          });
+          if (modified) {
+              await this.state.storage.put("gj_taskpool", this.taskpool);
+          }
+      }
+      return new Response(JSON.stringify({ success: true, freedCount }));
+  }
 
 
   
