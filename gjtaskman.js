@@ -14,13 +14,18 @@ export class GjTaskman {
   }
 
   async initialize() {
-    this.taskpool = await this.state.storage.get("gj_taskpool") || [];
-    this.lastPatrolTime = await this.state.storage.get("lastPatrolTime") || 0;
-    
-    if (this.taskpool.length !== POOL_SIZE) {
-      this.taskpool = Array.from({ length: POOL_SIZE }, (_, i) => this._createFreeSlot(i));
-      await this.state.storage.put("gj_taskpool", this.taskpool);
+    // --- CORRECTED INITIALIZATION LOGIC ---
+    let pool = await this.state.storage.get("gj_taskpool");
+
+    // Only initialize the pool IF AND ONLY IF it has never been created before.
+    if (pool === undefined || pool === null) {
+        console.log("GjTaskman: Initializing a brand new task pool.");
+        pool = Array.from({ length: POOL_SIZE }, (_, i) => this._createFreeSlot(i));
+        await this.state.storage.put("gj_taskpool", pool);
     }
+    
+    this.taskpool = pool;
+    this.lastPatrolTime = await this.state.storage.get("lastPatrolTime") || 0;
   }
 
   async ensureInitialized() {
