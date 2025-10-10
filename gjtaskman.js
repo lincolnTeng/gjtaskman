@@ -146,7 +146,7 @@ export class GjTaskman {
             success: true,
             resultjson: {
                 ...clonedData.fullProfile,
-                result_type: 'profile' // Mimic a profile task result
+                result_type: 'clone' // new task type
             }
         };
 
