@@ -145,7 +145,7 @@ export class GjTaskman {
         resultPayload = {
             success: true,
             resultjson: {
-                ...clonedData.fullProfile,
+                ...clonedData,
                 result_type: 'clone' // new task type
             }
         };
