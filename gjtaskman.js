@@ -114,7 +114,15 @@ export class GjTaskman {
 
     try {
         // 1. Execute the clone logic directly (migrated from clone.js)
-        const [originalUserId, originalVideoId] = taskcmd.split('@')[1].split('+');
+      //  const [originalUserId, originalVideoId] = taskcmd.split('@')[1].split('+');
+
+            // 1. Parse the command to get the originalUserId
+            // command is "l@originalUserId@videoId"
+            const originalUserId = taskcmd.split('@')[1]; 
+
+            // 2. The videoId is passed directly as an argument to this function.
+            const originalVideoId = videoId;
+      
         const targetKey = `user:${user.id}:${originalVideoId}`;
         const originalKey = `user:${originalUserId}:${originalVideoId}`;
 
