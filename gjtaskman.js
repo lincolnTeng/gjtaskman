@@ -66,6 +66,13 @@ export class GjTaskman {
 
     const { videoid, taskcmd, type } = await request.json();
 
+    // --- NEW LOGIC: Route task based on command ---
+    if (taskcmd && taskcmd.startsWith('l@')) {
+        // This is an instant clone task. Handle it directly.
+        return this.handleInstantCloneTask(user, videoid, taskcmd);
+    }
+
+    
     const freeSlotIndex = this.taskpool.findIndex(s => s.isFree);
 
     if (freeSlotIndex === -1) {
@@ -92,6 +99,78 @@ export class GjTaskman {
     return new Response(JSON.stringify({ id: taskId }), { status: 202 });
   }
 
+  // *** NEW PRIVATE HELPER FUNCTION ***
+  /**
+   * Handles a clone task instantly and places a 'finished' record in the task pool.
+   */
+  async handleInstantCloneTask(user, videoId, taskcmd) {
+    const freeSlotIndex = this.taskpool.findIndex(s => s.isFree);
+    if (freeSlotIndex === -1) {
+        return new Response(JSON.stringify({ error: "System is busy, cannot store clone result." }), { status: 429 });
+    }
+
+    const taskId = `t_${crypto.randomUUID()}`;
+    let resultPayload = {};
+
+    try {
+        // 1. Execute the clone logic directly (migrated from clone.js)
+        const [originalUserId, originalVideoId] = taskcmd.split('@')[1].split('+');
+        const targetKey = `user:${user.id}:${originalVideoId}`;
+        const originalKey = `user:${originalUserId}:${originalVideoId}`;
+
+        const originalDataStr = await this.env.USERVIDEO_KV.get(originalKey);
+        if (!originalDataStr) throw new Error('Original project not found.');
+        
+        const clonedData = JSON.parse(originalDataStr);
+        clonedData.isArchived = false;
+        clonedData.category = null;
+
+        await this.env.USERVIDEO_KV.put(targetKey, JSON.stringify(clonedData));
+
+        const now = Date.now();
+        await this.env.DB.prepare(
+            `INSERT INTO UserVideoState (userId, videoId, isArchived, lastInteractionAt) VALUES (?, ?, 0, ?)
+             ON CONFLICT(userId, videoId) DO UPDATE SET lastInteractionAt = excluded.lastInteractionAt, isArchived = 0`
+        ).bind(user.id, originalVideoId, now).run();
+
+        // 2. Construct a result payload that is compatible with the frontend
+        resultPayload = {
+            success: true,
+            resultjson: {
+                ...clonedData.fullProfile,
+                result_type: 'profile' // Mimic a profile task result
+            }
+        };
+
+    } catch (e) {
+        console.error(`Instant clone task failed for user ${user.id}:`, e.stack);
+        resultPayload = {
+            success: false,
+            logs: [{ src: 'GjTaskman.Clone', type: 'ERROR', payload: e.message }]
+        };
+    }
+
+    // 3. Place a pre-completed task record into the pool
+    this.taskpool[freeSlotIndex] = {
+        slotId: freeSlotIndex,
+        isFree: false,
+        taskId,
+        userId: user.id,
+        videoId: videoId,
+        taskcmd,
+        type: 'clone',
+        state: "finished", // Key difference: state starts as 'finished'
+        submitTime: Date.now(),
+        completionTime: Date.now(),
+        result: resultPayload,
+    };
+
+    // 4. Persist the pool and return the taskId for the frontend to poll
+    await this.state.storage.put("gj_taskpool", this.taskpool);
+    return new Response(JSON.stringify({ id: taskId }), { status: 202 });
+  }
+
+  
   /**
    * A task runner gets a task to execute.
    */
