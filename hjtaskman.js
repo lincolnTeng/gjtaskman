@@ -37,7 +37,7 @@ export class HjTaskman {
     // config
     this.LOG_FLUSH_SIZE = Number(env.LOG_FLUSH_SIZE) || DEFAULT_LOG_FLUSH_SIZE;
     this.LOG_TRUNCATE_LEN = Number(env.LOG_TRUNCATE_LEN) || DEFAULT_LOG_TRUNCATE_LEN;
-    this.TASKLOGS_KV = env.H_TASKLOGS_KV || env.TASKLOGS_KV || null;
+    this.TASKLOGS_KV = env.TASKLOGS_KV || null;
     this.USERVIDEO_KV = env.USERVIDEO_KV || null;
     this.DB = env.DB || null;
 
@@ -83,6 +83,10 @@ export class HjTaskman {
     if (!this.TASKLOGS_KV) return;
     if (!buffer || buffer.length === 0) return;
     try {
+
+ 
+
+      
       const chunkKey = `h:tasklogs:${taskId}:${Date.now()}`;
       await this.TASKLOGS_KV.put(chunkKey, JSON.stringify(buffer));
       const metaKey = `h:tasklogs:${taskId}:meta`;
