@@ -1,39 +1,43 @@
+# Updated wrangler.toml — single TASKLOGS_KV added for HjTaskman logs.
 name = "gjtaskman"
 compatibility_date = "2025-04-19"
 
-main = "index.js"
+main = "index.js"   # 推荐入口 index.js（需导出 GjTaskman 和 HjTaskman）
 workers_dev = false
-# --- Durable Object Bindings (No changes here) ---
- 
+
+# Durable Object bindings
 [[durable_objects.bindings]]
 name = "GJTASKMAN"
 class_name = "GjTaskman"
 
+[[durable_objects.bindings]]
+name = "HJTASKMAN"
+class_name = "HjTaskman"
+
 [vars]
 # EXAMPLE_VAR = "some_value"
 
-# --- D1 数据库绑定 ---
-# 将你的 D1 数据库绑定到这个 Worker 上，代码中可以通过 env.DB 来访问
+# D1 database binding (unchanged)
 [[d1_databases]]
-binding = "DB"                  # 在代码中使用的名字 (env.DB)
-database_name = "vdown"  # 你在 Cloudflare 创建的 D1 数据库的名称
-database_id = "03d64d46-1842-4403-846a-95fd01de87a7"    # 你在 Cloudflare 创建的 D1 数据库的 UUID
+binding = "DB"
+database_name = "vdown"
+database_id = "03d64d46-1842-4403-846a-95fd01de87a7"
 
-# --- KV 命名空间绑定 ---
-# 将你的 KV 命名空间绑定到这个 Worker 上
-
- 
-# 你提到的 VINFOKV，如果它是 PROFILES_KV 的别名或有其他用途，也一并绑定
+# Existing KV bindings (unchanged)
 [[kv_namespaces]]
-binding = "VINFOKV"             # 在代码中使用的名字 (env.VINFOKV)
-id = "80ef0424caac4d629ea752b810f5f8de"      # 你的 VINFOKV 的 Namespace ID
+binding = "VINFOKV"
+id = "80ef0424caac4d629ea752b810f5f8de"
 
-# 你提到的 VINFOKV，如果它是 PROFILES_KV 的别名或有其他用途，也一并绑定
 [[kv_namespaces]]
-binding = "USERVIDEO_KV"             # 在代码中使用的名字 (env.VINFOKV)
-id = "f20b7670a4a1475993f7c921c0521c83"      # 你的 VINFOKV 的 Namespace ID
+binding = "USERVIDEO_KV"
+id = "f20b7670a4a1475993f7c921c0521c83"
+
+# NEW: single TASKLOGS_KV for hjtaskman raw log persistence
+# Replace the id below with your KV namespace ID for task logs
+[[kv_namespaces]]
+binding = "TASKLOGS_KV"
+id = "9485b8baeec8421f9bd99d184d42b7e1"
 
 [[migrations]]
 tag = "v1"
-new_classes = [ "GjTaskman" ]
- 
+new_classes = [ "GjTaskman", "HjTaskman" ]
