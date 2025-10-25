@@ -40,4 +40,9 @@ id = "9485b8baeec8421f9bd99d184d42b7e1"
 
 [[migrations]]
 tag = "v1"
-new_classes = [ "GjTaskman", "HjTaskman" ]
+new_classes = [ "GjTaskman" ]
+
+
+[[migrations]]
+tag = "v2"
+new_classes = ["HjTaskman"]
