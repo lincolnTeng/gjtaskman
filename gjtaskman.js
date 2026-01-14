@@ -240,11 +240,27 @@ export class GjTaskman {
     }
 
     // Return a subset of the slot data, including status and result.
+    //const responsePayload = {      status: slot.state,      result: slot.result,  };
+    // --- 修改开始：返回更多用于 UI 展示的字段 ---
     const responsePayload = {
-      status: slot.state,
-      result: slot.result,
+        // 基础状态
+        status: slot.state, 
+        result: slot.result,
+        // UI 元数据
+        taskId: slot.taskId,
+        slotId: slot.slotId,
+        videoId: slot.videoId,
+        userId: slot.userId,
+        type: slot.type,
+        taskcmd: slot.taskcmd,
+        submitTime: slot.submitTime,
+        startTime: slot.startTime
     };
+    // --- 修改结束 ---
 
+
+
+    
     return new Response(JSON.stringify(responsePayload), {
       headers: { 'Content-Type': 'application/json' }
     });
@@ -283,18 +299,22 @@ export class GjTaskman {
    * Returns a high-level state of the pool for monitoring.
    */
   async totalstate() {
+    const activeIds = []; 
     const states = this.taskpool.reduce((acc, slot) => {
         if (slot.isFree) {
             acc.free = (acc.free || 0) + 1;
         } else {
             acc[slot.state] = (acc[slot.state] || 0) + 1;
+            if (slot.taskId) activeIds.push(slot.taskId);
+          
         }
         return acc;
     }, {});
     
     return new Response(JSON.stringify({
         poolSize: POOL_SIZE,
-        ...states
+        ...states,
+        activeIds 
     }));
   }
 
