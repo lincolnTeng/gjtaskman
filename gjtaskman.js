@@ -46,6 +46,8 @@ export class GjTaskman {
       case "/taskstate": return this.taskstate(request);
       case "/takeandover": return this.takeandover(request); // New endpoint for frontend
       case "/totalstate": return this.totalstate(request);
+      case "/killtask": return this.killtask(request);
+        
       // --- NEW ADMIN ENDPOINTS ---
       case "/requestpatrol": return this.requestPatrol(request);
       case "/freeoverslots": return this.freeOverSlots(request);
@@ -209,7 +211,7 @@ export class GjTaskman {
     }
 
     const slot = this.taskpool[slotIndex];
-    slot.state = "finished";
+    //slot.state = "finished";
     slot.completionTime = Date.now();
     slot.result = result; // Store the full result from the runner
     await this.state.storage.put("gj_taskpool", this.taskpool);
@@ -226,6 +228,7 @@ export class GjTaskman {
                     console.error(`Async persistence failed for ${taskid}:`, err);
                     // 就算这里失败了，前端也已经拿到结果了，影响仅限于“历史记录”里缺了一条
                 }
+           slot.state = "finished";
           })());
 
        
@@ -235,7 +238,7 @@ export class GjTaskman {
             console.error(`CRITICAL PERSISTENCE FAILURE for successful task ${taskid}. Error: ${error.stack}`);
             slot.result.persistenceError = error.message; // Log persistence error in the task result
         }*/
-    }
+    }else { slot.state = "finished"; }
     
 
     return new Response(JSON.stringify({ success: true }));
@@ -332,6 +335,41 @@ export class GjTaskman {
     }));
   }
 
+
+/**
+   * [ADMIN] Force resets a specific slot to "Free" state.
+   * 用于手动清除僵尸任务，无论任务当前处于什么状态。
+   */
+  async killtask(request) {
+    try {
+        const { slotId } = await request.json();
+
+        // 1. 校验参数
+        // POOL_SIZE 是文件顶部的常量 (50)
+        if (slotId === undefined || slotId === null || slotId < 0 || slotId >= POOL_SIZE) {
+            return new Response(JSON.stringify({ error: "Invalid Slot ID" }), { status: 400 });
+        }
+
+        console.log(`[Admin] Force killing Slot #${slotId}`);
+
+        // 2. 核心操作：直接用全新的空 Slot 覆盖当前位置
+        // _createFreeSlot 是你现有的辅助函数，它会生成 { slotId: id, isFree: true, ... }
+        this.taskpool[slotId] = this._createFreeSlot(slotId);
+
+        // 3. 立即持久化 (这是最关键的一步，防止 DO 重启后回滚)
+        await this.state.storage.put("gj_taskpool", this.taskpool);
+
+        return new Response(JSON.stringify({ 
+            success: true, 
+            message: `Slot ${slotId} has been force freed.` 
+        }));
+
+    } catch (err) {
+        return new Response(JSON.stringify({ error: err.message }), { status: 500 });
+    }
+  }
+
+  
   // This private helper remains unchanged
  // --- PRIVATE HELPERS ---
 
