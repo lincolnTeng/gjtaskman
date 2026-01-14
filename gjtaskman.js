@@ -212,18 +212,32 @@ export class GjTaskman {
     slot.state = "finished";
     slot.completionTime = Date.now();
     slot.result = result; // Store the full result from the runner
+    await this.state.storage.put("gj_taskpool", this.taskpool);
 
+    
     // --- CRITICAL: This is the ONLY persistence of the FINAL USER DATA ---
-    if (result.success && result.resultjson) {
-        try {
+     if (result.success && result.resultjson) {
+
+         this.state.waitUntil((async () => {
+                try {
+                    // 原来的 _persistFinalResult 逻辑放在这里
+                    await this._persistFinalResult(slot, result.resultjson);
+                } catch (err) {
+                    console.error(`Async persistence failed for ${taskid}:`, err);
+                    // 就算这里失败了，前端也已经拿到结果了，影响仅限于“历史记录”里缺了一条
+                }
+          })());
+
+       
+        /*try {
             await this._persistFinalResult(slot, result.resultjson);
         } catch (error) {
             console.error(`CRITICAL PERSISTENCE FAILURE for successful task ${taskid}. Error: ${error.stack}`);
             slot.result.persistenceError = error.message; // Log persistence error in the task result
-        }
+        }*/
     }
     
-    await this.state.storage.put("gj_taskpool", this.taskpool);
+
     return new Response(JSON.stringify({ success: true }));
   }
 
