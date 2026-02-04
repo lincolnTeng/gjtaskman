@@ -204,6 +204,56 @@ export class GjTaskman {
    * A task runner returns the result. The slot is NOT freed but marked as 'finished'.
    */
 async taskreturn(request) {
+    try {
+      const { taskid, result } = await request.json();
+      const slotIndex = this.taskpool.findIndex(s => s.taskId === taskid && s.state === 'running');
+      
+      if (slotIndex === -1) return new Response("Task not found", { status: 404 });
+      const slot = this.taskpool[slotIndex];
+
+      // --- 关键改进 1: 数据存入 KV，给 DO 减重 ---
+      const kvKey = `task_res:${taskid}`;
+      // 这里的 env.USERVIDEO_KV 确保已在 wrangler.toml 绑定
+      this.state.waitUntil(this.env.USERVIDEO_KV.put(kvKey, JSON.stringify(result), {
+        expirationTtl: 86400 // 24小时自动过期，清理战场
+      }));
+
+      // --- 关键改进 2: DO 内存只保留轻量索引 ---
+      slot.completionTime = Date.now();
+      slot.state = "finished";
+      
+      // 我们只存一个极小的 result 摘要在 DO storage 里
+      slot.result = {
+        success: result.success,
+        kvKey: kvKey, // 记录去哪里取数据
+        summary: result.resultjson?.video_info?.title || "Task Completed"
+      };
+
+      // 此时 put 的数据极小，彻底解决 128KB 限制问题
+      await this.state.storage.put("gj_taskpool", this.taskpool);
+
+      // --- 关键改进 3: 异步持久化 D1 ---
+      if (result.success && result.resultjson) {
+        this.state.waitUntil((async () => {
+          try {
+            await this._persistFinalResult(slot, result.resultjson);
+          } catch (e) {
+            console.error("D1 Persistence Failed:", e);
+          }
+        })());
+      }
+
+      return new Response(JSON.stringify({ success: true }));
+
+    } catch (err) {
+      console.error("taskreturn error:", err);
+      return new Response(err.message, { status: 500 });
+    }
+  }
+
+
+  
+async taskreturn2(request) {
   try {
     const { taskid, result } = await request.json();
     const slotIndex = this.taskpool.findIndex(s => s.taskId === taskid && s.state === 'running');
@@ -291,7 +341,34 @@ async taskreturn(request) {
   /**
    * Client polls this to get task status and results.
    */
-  async taskstate(request) {
+async taskstate(request) {
+    const { taskid } = await request.json();
+    const slot = this.taskpool.find(s => s.taskId === taskid);
+    
+    if (!slot) return new Response(JSON.stringify({ error: "Not found" }), { status: 404 });
+
+    let finalResult = slot.result;
+
+    // 如果任务完成了，且我们存的是 KV 指针，则实时从 KV 取回完整数据给前端
+    if (slot.state === 'finished' && slot.result?.kvKey) {
+      const cached = await this.env.USERVIDEO_KV.get(slot.result.kvKey);
+      if (cached) {
+        finalResult = JSON.parse(cached);
+      }
+    }
+
+    return new Response(JSON.stringify({
+      status: slot.state,
+      result: finalResult, // 这里的结构和原来一模一样，前端无感知
+      taskId: slot.taskId,
+      videoId: slot.videoId,
+      type: slot.type
+    }));
+  }
+
+
+  
+  async taskstate2(request) {
     const { taskid } = await request.json();
     if (!taskid) return new Response(JSON.stringify({ error: "taskid is required" }), { status: 400 });
 
