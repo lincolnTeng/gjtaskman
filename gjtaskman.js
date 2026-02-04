@@ -402,6 +402,36 @@ async taskreturn2(request) {
    * Client polls this to get task status and results.
    */
 async taskstate(request) {
+  try {
+    const { taskid } = await request.json();
+    const slot = this.taskpool.find(s => s.taskId === taskid);
+
+    if (!slot) {
+      return new Response(JSON.stringify({ error: "Task not found" }), { status: 404 });
+    }
+
+    const responsePayload = {
+      taskid: taskid,
+      status: slot.state, // 'running', 'finished', 'over'
+    };
+
+    // 如果任务已完成或已接管，返回我们在 taskreturn 中构造的瘦 result
+    if (slot.state === 'finished' || slot.state === 'over') {
+      responsePayload.result = slot.result;
+    }
+
+    return new Response(JSON.stringify(responsePayload), {
+      headers: { 'Content-Type': 'application/json' }
+    });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: err.message }), { status: 500 });
+  }
+}
+
+
+
+  
+async taskstate3(request) {
     const { taskid } = await request.json();
     const slot = this.taskpool.find(s => s.taskId === taskid);
     
