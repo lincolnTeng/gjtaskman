@@ -204,6 +204,66 @@ export class GjTaskman {
    * A task runner returns the result. The slot is NOT freed but marked as 'finished'.
    */
 async taskreturn(request) {
+  try {
+    const { taskid, result } = await request.json();
+    // 查找正在运行的槽位
+    const slotIndex = this.taskpool.findIndex(s => s.taskId === taskid && s.state === 'running');
+    
+    if (slotIndex === -1) {
+      return new Response(JSON.stringify({ error: "Task not found or not running" }), { status: 404 });
+    }
+
+    const slot = this.taskpool[slotIndex];
+
+    // --- 1. 数据存入 KV (减重核心) ---
+    // 原始巨大的 result 对象存入 KV，有效期 24 小时
+    const kvKey = `task_res:${taskid}`;
+    this.state.waitUntil(this.env.USERVIDEO_KV.put(kvKey, JSON.stringify(result), {
+      expirationTtl: 86400 
+    }));
+
+    // --- 2. 内存状态更新 (适配前端逻辑) ---
+    slot.completionTime = Date.now();
+    slot.state = "finished";
+    
+    // 重要：这里的 result 必须包含 task_context，否则前端 handleResultPayload 会卡死
+    slot.result = {
+      success: result.success,
+      result_type: slot.type, // 'profile' 或 'download'
+      task_context: slot.task_context, // 还原上下文，确保包含 video_id 和 vdir
+      kvKey: kvKey, // 告知前端/后续逻辑去哪里拿大数据
+      summary: result.resultjson?.video_info?.title || "Task Completed"
+    };
+
+    // 同步保存到 DO 存储
+    await this.state.storage.put("gj_taskpool", this.taskpool);
+
+    // --- 3. 异步持久化 D1 数据库 ---
+    if (result.success && result.resultjson) {
+      this.state.waitUntil((async () => {
+        try {
+          await this._persistFinalResult(slot, result.resultjson);
+          console.log(`D1 Persistence Success: ${taskid}`);
+        } catch (e) {
+          console.error("D1 Persistence Failed:", e);
+        }
+      })());
+    }
+
+    return new Response(JSON.stringify({ success: true }), {
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+  } catch (err) {
+    console.error("Critical error in taskreturn:", err);
+    return new Response(JSON.stringify({ error: err.message }), { status: 500 });
+  }
+}
+
+
+
+  
+async taskreturn3(request) {
     try {
       const { taskid, result } = await request.json();
       const slotIndex = this.taskpool.findIndex(s => s.taskId === taskid && s.state === 'running');
