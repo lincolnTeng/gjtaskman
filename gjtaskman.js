@@ -203,7 +203,51 @@ export class GjTaskman {
   /**
    * A task runner returns the result. The slot is NOT freed but marked as 'finished'.
    */
-  async taskreturn(request) {
+async taskreturn(request) {
+  try {
+    const { taskid, result } = await request.json();
+    const slotIndex = this.taskpool.findIndex(s => s.taskId === taskid && s.state === 'running');
+    
+    if (slotIndex === -1) {
+      return new Response(JSON.stringify({ error: "Task not found" }), { status: 404 });
+    }
+
+    const slot = this.taskpool[slotIndex];
+    slot.completionTime = Date.now();
+    slot.result = result;
+
+    // --- 关键修改 1: 立即同步修改状态并保存 ---
+    // 先标记为 finished，确保 DO 即使现在崩溃，状态也是对的
+    slot.state = "finished"; 
+    await this.state.storage.put("gj_taskpool", this.taskpool);
+
+    // --- 关键修改 2: 只把耗时的数据库/KV 写入放进 waitUntil ---
+    if (result.success && result.resultjson) {
+      this.state.waitUntil((async () => {
+        try {
+          // 这里只负责 DB 和 KV 的持久化
+          await this._persistFinalResult(slot, result.resultjson);
+          console.log(`Async persistence success for ${taskid}`);
+        } catch (err) {
+          console.error(`Async persistence CRITICAL FAILURE for ${taskid}:`, err.message);
+          // 可以在这里考虑是否要把错误存入 slot.result.error 以便前端知晓
+        }
+      })());
+    }
+
+    // 立即返回成功，不再等待数据库
+    return new Response(JSON.stringify({ success: true }), {
+        headers: { 'Content-Type': 'application/json' }
+    });
+
+  } catch (globalErr) {
+    console.error("Critical 500 error in taskreturn:", globalErr.stack);
+    return new Response(JSON.stringify({ error: globalErr.message }), { status: 500 });
+  }
+}
+  
+  
+  async taskreturn_slow(request) {
     const { taskid, result } = await request.json();
     const slotIndex = this.taskpool.findIndex(s => s.taskId === taskid && s.state === 'running');
     if (slotIndex === -1) {
