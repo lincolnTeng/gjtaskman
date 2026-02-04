@@ -206,6 +206,42 @@ export class GjTaskman {
 async taskreturn(request) {
   try {
     const { taskid, result } = await request.json();
+    const slot = this.taskpool.find(s => s.taskId === taskid && s.state === 'running');
+    
+    if (!slot) return new Response("Task not found", { status: 404 });
+
+    // 1. 瘦身逻辑：将全量结果存入 KV
+    const kvKey = `task_res:${taskid}`;
+    this.state.waitUntil(this.env.USERVIDEO_KV.put(kvKey, JSON.stringify(result), { 
+      expirationTtl: 86400 
+    }));
+
+    // 2. DO 内存只保留轻量索引
+    slot.state = "finished";
+    slot.completionTime = Date.now();
+    slot.result = {
+      success: result.success,
+      task_context: slot.task_context, // 必须保留，用于前端定位 Card
+      kvKey: kvKey, // 记录去哪里取回全量数据
+    };
+
+    // 3. 异步持久化到 D1 (原有逻辑不变)
+    if (result.success && result.resultjson) {
+      this.state.waitUntil(this._persistFinalResult(slot, result.resultjson));
+    }
+
+    await this.state.storage.put("gj_taskpool", this.taskpool);
+    return new Response(JSON.stringify({ success: true }));
+  } catch (err) {
+    return new Response(err.message, { status: 500 });
+  }
+}
+
+
+  
+async taskreturn4(request) {
+  try {
+    const { taskid, result } = await request.json();
     // 查找正在运行的槽位
     const slotIndex = this.taskpool.findIndex(s => s.taskId === taskid && s.state === 'running');
     
@@ -402,6 +438,22 @@ async taskreturn2(request) {
    * Client polls this to get task status and results.
    */
 async taskstate(request) {
+  const { taskid } = await request.json();
+  const slot = this.taskpool.find(s => s.taskId === taskid);
+
+  if (!slot) return new Response(JSON.stringify({ error: "Task missing" }), { status: 404 });
+
+  return new Response(JSON.stringify({
+    taskid: taskid,
+    status: slot.state, // 只要返回 finished，前端就会触发 takeandover
+    // 轮询时不需要给大数据，给个摘要即可
+    result: (slot.state === 'finished' || slot.state === 'over') ? slot.result : null
+  }));
+}
+
+
+  
+async taskstate4(request) {
   try {
     const { taskid } = await request.json();
     const slot = this.taskpool.find(s => s.taskId === taskid);
@@ -497,7 +549,56 @@ async taskstate3(request) {
   /**
    * NEW: Frontend calls this to fetch the result AND mark the task as "over".
    */
-  async takeandover(request) {
+async takeandover(request) {
+  try {
+    const { taskid } = await request.json();
+    const slotIndex = this.taskpool.findIndex(s => s.taskId === taskid && s.state === 'finished');
+
+    if (slotIndex === -1) {
+      // 如果内存里找不到 finished，可能已经处理过，直接回退到查询逻辑
+      return this.taskstate(request);
+    }
+
+    const slot = this.taskpool[slotIndex];
+    const kvKey = slot.result.kvKey;
+
+    // --- 关键设计复原：从 KV 中读取被瘦身的大数据 ---
+    let fullResult = null;
+    if (kvKey) {
+      const kvData = await this.env.USERVIDEO_KV.get(kvKey);
+      if (kvData) {
+        fullResult = JSON.parse(kvData);
+      }
+    }
+
+    // 标记状态为 over，准备从 pool 卸载
+    slot.state = "over";
+    await this.state.storage.put("gj_taskpool", this.taskpool);
+
+    // 拼装给前端的完整包：状态 + 从 KV 复原的 result + 原始 context
+    const responsePayload = {
+      status: "finished",
+      // 这里要把 KV 里的数据和内存里的 context 重新拼起来
+      result: {
+        ...(fullResult || {}), 
+        task_context: slot.task_context // 确保这个字段在最外层，前端秒读
+      }
+    };
+
+    return new Response(JSON.stringify(responsePayload), {
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+  } catch (err) {
+    console.error("takeandover recovery failed:", err);
+    return new Response(JSON.stringify({ error: err.message }), { status: 500 });
+  }
+}
+
+
+
+  
+  async takeandover4(request) {
     const { taskid } = await request.json();
     if (!taskid) return new Response(JSON.stringify({ error: "taskid is required" }), { status: 400 });
 
