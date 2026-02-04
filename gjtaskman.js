@@ -446,6 +446,9 @@ async taskstate(request) {
   return new Response(JSON.stringify({
     taskid: taskid,
     status: slot.state, // 只要返回 finished，前端就会触发 takeandover
+    videoId: slot.videoId, // 加上这行
+    userId: slot.userId,   // 加上这行
+    type: slot.type,       // 加上这行
     // 轮询时不需要给大数据，给个摘要即可
     result: (slot.state === 'finished' || slot.state === 'over') ? slot.result : null
   }));
